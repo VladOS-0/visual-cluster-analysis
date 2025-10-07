@@ -16,12 +16,14 @@ use crate::{
 
 const MAX_IMAGE_DIMENSION: u32 = 5_000;
 
-const IMAGE_PADDING: u32 = 2;
+const IMAGE_PADDING: u32 = 1;
 
 const POINT_ALPHA: f32 = 1.0;
 
 const FILLING_COLOR: &str = "#FFFFFF";
 const FILLING_ALPHA: f32 = 1.0;
+
+const GRAPH_X_STEP: f32 = 0.1;
 
 /// Class ID - (Core Color, Point Color)
 type ClassColors = HashMap<usize, (Color, Color)>;
@@ -249,7 +251,13 @@ impl<T: AsRef<Path>> Image<T> {
         class_colors
     }
 
-    pub fn draw_point_with_class(&mut self, point: Point, class: usize, is_core: bool) {
+    pub fn draw_point_with_class(
+        &mut self,
+        point: Point,
+        class: usize,
+        is_core: bool,
+        silent: bool,
+    ) {
         let color = self
             .class_colors
             .entry(class)
@@ -262,15 +270,21 @@ impl<T: AsRef<Path>> Image<T> {
             .clone();
 
         if is_core {
-            self.draw_point_with_color(point, color.0, false);
+            self.draw_point_with_color(point, color.0, false, silent);
         } else {
-            self.draw_point_with_color(point, color.1, true);
+            self.draw_point_with_color(point, color.1, true, silent);
         }
     }
 
-    pub fn draw_point_with_color(&mut self, point: Point, color: Color, do_not_override: bool) {
-        let x = point.x.round() - self.rect.bottom_left.x;
-        let y = point.y.round() - self.rect.bottom_left.y;
+    pub fn draw_point_with_color(
+        &mut self,
+        point: Point,
+        color: Color,
+        do_not_override: bool,
+        silent: bool,
+    ) {
+        let x = point.x.floor() - self.rect.bottom_left.x;
+        let y = point.y.floor() - self.rect.bottom_left.y;
 
         let width_ratio = (self.inner.width() - IMAGE_PADDING) as f32 / self.rect.width();
         let height_ratio = (self.inner.height() - IMAGE_PADDING) as f32 / self.rect.height();
@@ -280,28 +294,65 @@ impl<T: AsRef<Path>> Image<T> {
             (y * height_ratio).floor() as u32 + IMAGE_PADDING / 2,
         );
         if let None = pixel {
-            eprintln!(
-                "ПРЕДУПРЕЖДЕНИЕ: не удалось отрисовать пиксель для точки {} по коориданатам ({}; {}); Поле - {}; Ширина изображения - {}, Высота изображения - {}",
-                point,
-                (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
-                (y * height_ratio).floor() as u32 + IMAGE_PADDING / 2,
-                self.rect,
-                self.inner.width(),
-                self.inner.height()
-            );
+            if !silent {
+                eprintln!(
+                    "ПРЕДУПРЕЖДЕНИЕ: не удалось отрисовать пиксель для точки {} по коориданатам ({}; {}); Поле - {}; Ширина изображения - {}, Высота изображения - {}",
+                    point,
+                    (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
+                    (y * height_ratio).floor() as u32 + IMAGE_PADDING / 2,
+                    self.rect,
+                    self.inner.width(),
+                    self.inner.height()
+                );
+            }
             return;
         }
         let pixel = pixel.unwrap();
         if do_not_override && pixel.0 != Color::hex(FILLING_COLOR, FILLING_ALPHA).inner.0 {
-            println!(
-                "ПРЕДУПРЕЖДЕНИЕ: пиксель {} по коориданатам ({}; {}) накладывается на другой и отрисован не будет.",
-                point,
-                (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
-                (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
-            );
+            if !silent {
+                println!(
+                    "ПРЕДУПРЕЖДЕНИЕ: пиксель {} по коориданатам ({}; {}) накладывается на другой и отрисован не будет.",
+                    point,
+                    (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
+                    (x * width_ratio).floor() as u32 + IMAGE_PADDING / 2,
+                );
+            }
             return;
         }
         *pixel = color.inner();
+    }
+
+    pub fn draw_graph<K>(&mut self, func: K, color: Option<Color>)
+    where
+        K: Fn(f32) -> Option<f32>,
+    {
+        let color = color.unwrap_or_else(|| Color::hex("#b90000", 0.6));
+
+        let mut x = self.rect.bottom_left.x;
+
+        while x <= self.rect.upper_right.x {
+            let y = func(x);
+            if let Some(y) = y {
+                self.draw_point_with_color(Point::new(x, y), color, false, false);
+            }
+            x += GRAPH_X_STEP;
+        }
+    }
+
+    pub fn draw_axises(&mut self, color: Option<Color>) {
+        let color = color.unwrap_or_else(|| Color::hex("#000000", 0.3));
+
+        let mut x = self.rect.bottom_left.x;
+        while x <= self.rect.upper_right.x {
+            self.draw_point_with_color(Point::new(x, 0.0), color, false, false);
+            x += 1.0;
+        }
+
+        let mut y = self.rect.bottom_left.y;
+        while y <= self.rect.upper_right.y {
+            self.draw_point_with_color(Point::new(0.0, y), color, false, false);
+            y += 1.0;
+        }
     }
 
     pub fn save(&mut self) {
@@ -393,26 +444,26 @@ impl Color {
         if self.inner.0[0] >= 30 {
             self.inner.0[0] -= 30;
         } else {
-            self.inner.0[0] = rand_f32_in_range(0.0, self.inner.0[0] as f32) as u8
+            self.inner.0[0] = rand_f32_in_range(0.0, self.inner.0[0] as f32, 0) as u8
         }
 
         if self.inner.0[1] >= 30 {
             self.inner.0[1] -= 30;
         } else {
-            self.inner.0[1] = rand_f32_in_range(0.0, self.inner.0[2] as f32) as u8
+            self.inner.0[1] = rand_f32_in_range(0.0, self.inner.0[2] as f32, 0) as u8
         }
 
         if self.inner.0[2] >= 30 {
             self.inner.0[2] -= 30;
         } else {
-            self.inner.0[2] = rand_f32_in_range(0.0, self.inner.0[2] as f32) as u8
+            self.inner.0[2] = rand_f32_in_range(0.0, self.inner.0[2] as f32, 0) as u8
         }
     }
 
     pub fn rand() -> Self {
-        let r = rand_f32_in_range(0.0, 255.0).round() as u8;
-        let g = rand_f32_in_range(0.0, 255.0).round() as u8;
-        let b = rand_f32_in_range(0.0, 255.0).round() as u8;
+        let r = rand_f32_in_range(0.0, 255.0, 0) as u8;
+        let g = rand_f32_in_range(0.0, 255.0, 0) as u8;
+        let b = rand_f32_in_range(0.0, 255.0, 0) as u8;
         Self::rgba(r, g, b, (POINT_ALPHA * 255.0) as u8)
     }
 

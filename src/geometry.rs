@@ -2,8 +2,8 @@ use std::process::exit;
 
 use crate::utils::rand_f32_in_range;
 
-const DEFAULT_BOTTOM_LEFT_X: f32 = 0.0;
-const DEFAULT_BOTTOM_LEFT_Y: f32 = 0.0;
+const DEFAULT_BOTTOM_LEFT_X: f32 = -100.0;
+const DEFAULT_BOTTOM_LEFT_Y: f32 = -100.0;
 const DEFAULT_UPPER_RIGHT_X: f32 = 100.0;
 const DEFAULT_UPPER_RIGHT_Y: f32 = 100.0;
 
@@ -36,7 +36,7 @@ impl Ord for Point {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Rectangular {
     pub bottom_left: Point,
     pub upper_right: Point,
@@ -67,10 +67,11 @@ impl Rectangular {
             upper_right,
         }
     }
+
     pub fn center(&self) -> Point {
         Point::new(
-            (self.upper_right.x - self.bottom_left.x) / 2.0,
-            (self.upper_right.y - self.bottom_left.y) / 2.0,
+            self.bottom_left.x + self.width() / 2.0,
+            self.bottom_left.y + self.height() / 2.0,
         )
     }
     pub fn width(&self) -> f32 {
@@ -81,8 +82,8 @@ impl Rectangular {
     }
     pub fn create_rand_point(&self) -> Point {
         Point::new(
-            rand_f32_in_range(self.bottom_left.x, self.upper_right.x),
-            rand_f32_in_range(self.bottom_left.y, self.upper_right.y),
+            rand_f32_in_range(self.bottom_left.x, self.upper_right.x, 0),
+            rand_f32_in_range(self.bottom_left.y, self.upper_right.y, 0),
         )
     }
 }

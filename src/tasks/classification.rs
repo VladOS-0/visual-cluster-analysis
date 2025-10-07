@@ -5,7 +5,7 @@ use crate::{
     visual::Image,
 };
 
-const DEFAULT_POINTS_COUNT: usize = 100;
+const DEFAULT_POINTS_COUNT: usize = 1000;
 const DEFAULT_CORES_COUNT: usize = 10;
 
 pub fn execute() {
@@ -14,7 +14,7 @@ pub fn execute() {
     let boundary = Rectangular::default();
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/classification.png",
-        boundary,
+        boundary.clone(),
         true,
         None,
         None,
@@ -48,9 +48,9 @@ pub fn execute() {
         println!("---------------------------------------");
         println!("{} класс: {}", class_num, class.0);
         let mut point_num = 1;
-        drawing.draw_point_with_class(*class.0, class_num, true);
+        drawing.draw_point_with_class(*class.0, class_num, true, false);
         for point in class.1 {
-            drawing.draw_point_with_class(*point, class_num, false);
+            drawing.draw_point_with_class(*point, class_num, false, false);
             println!(
                 "{}: {} | Расстояние до центра класса: {}",
                 point_num,

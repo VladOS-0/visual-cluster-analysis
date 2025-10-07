@@ -1,21 +1,24 @@
 use std::io::stdin;
 
-use crate::geometry::{Point, Rectangular};
+use crate::{
+    geometry::{Point, Rectangular},
+    visual::Image,
+};
 
-const DEFAULT_POINT_AMOUNT: usize = 100;
-
-const BOTTOM_LEFT_X: f32 = 0.0;
-const BOTTOM_LEFT_Y: f32 = 0.0;
-const UPPER_RIGHT_X: f32 = 100.0;
-const UPPER_RIGHT_Y: f32 = 100.0;
+const DEFAULT_POINT_AMOUNT: usize = 1000;
 
 pub fn execute() {
     let point_amount = dialogue();
 
-    let bottom_left = Point::new(BOTTOM_LEFT_X, BOTTOM_LEFT_Y);
-    let upper_right = Point::new(UPPER_RIGHT_X, UPPER_RIGHT_Y);
+    let boundary = Rectangular::default();
 
-    let boundary = Rectangular::new(bottom_left, upper_right);
+    let mut drawing = Image::new(
+        "/home/vlad0s/Изображения/Misc/labs/k_mean.png",
+        boundary.clone(),
+        true,
+        None,
+        None,
+    );
 
     let center = boundary.center();
     println!("Границы:{}\nЦентр - {}\nТочки:", boundary, center);
@@ -25,6 +28,8 @@ pub fn execute() {
 
     for i in 1..point_amount {
         let point = boundary.create_rand_point();
+        drawing.draw_point_with_class(point, 1, false, false);
+
         let distance = point.distance_to(center);
         if min_distance.is_none() || min_distance.unwrap() > distance {
             class_center = Some(point);
@@ -36,12 +41,18 @@ pub fn execute() {
     if class_center.is_none() || min_distance.is_none() {
         panic!("У нас буквально нету победителя!! КОШМАР!!")
     }
+    let class_center = class_center.unwrap();
+    let min_distance = min_distance.unwrap();
+
+    drawing.draw_point_with_class(class_center, 1, true, false);
 
     println!(
         "\nЦЕНТР КЛАССА - {} с расстоянием до центра {}",
-        class_center.unwrap(),
-        min_distance.unwrap()
+        class_center, min_distance
     );
+
+    drawing.save();
+    drawing.show("gimp");
 }
 
 fn dialogue() -> usize {
@@ -54,7 +65,7 @@ fn dialogue() -> usize {
     stdin()
         .read_line(&mut buf)
         .expect("Не удалось прочитать из стандартного ввода.");
-    let mut count = buf.parse::<usize>().unwrap_or(DEFAULT_POINT_AMOUNT);
+    let mut count = buf.trim().parse::<usize>().unwrap_or(DEFAULT_POINT_AMOUNT);
     if count == 0 {
         count = DEFAULT_POINT_AMOUNT;
     }
