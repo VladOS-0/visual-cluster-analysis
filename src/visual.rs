@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    ops::Sub,
     path::Path,
     process::{Command, exit},
 };
@@ -10,7 +11,8 @@ use image::{
 };
 
 use crate::{
-    geometry::{Point, Rectangular},
+    font::CharSymbol,
+    geometry::{Axis, FixedPosition, Point, Rectangle},
     utils::rand_f32_in_range,
 };
 
@@ -32,7 +34,7 @@ type ClassColors = HashMap<usize, (Color, Color)>;
 pub struct Image<T: AsRef<Path>> {
     path: T,
     inner: RgbaImage,
-    rect: Rectangular,
+    rect: Rectangle,
     class_colors: ClassColors,
 
     final_width: u32,
@@ -42,7 +44,7 @@ pub struct Image<T: AsRef<Path>> {
 impl<T: AsRef<Path>> Image<T> {
     pub fn new(
         path: T,
-        rect: Rectangular,
+        rect: Rectangle,
         fill: bool,
         custom_width: Option<u32>,
         custom_height: Option<u32>,
@@ -284,7 +286,7 @@ impl<T: AsRef<Path>> Image<T> {
         silent: bool,
     ) {
         let x = point.x.floor() - self.rect.bottom_left.x;
-        let y = point.y.floor() - self.rect.bottom_left.y;
+        let y = self.rect.top_right.y - point.y.floor();
 
         let width_ratio = (self.inner.width() - IMAGE_PADDING) as f32 / self.rect.width();
         let height_ratio = (self.inner.height() - IMAGE_PADDING) as f32 / self.rect.height();
@@ -322,7 +324,7 @@ impl<T: AsRef<Path>> Image<T> {
         *pixel = color.inner();
     }
 
-    pub fn draw_graph<K>(&mut self, func: K, color: Option<Color>)
+    pub fn draw_graph<K>(&mut self, func: &K, color: Option<Color>)
     where
         K: Fn(f32) -> Option<f32>,
     {
@@ -330,28 +332,88 @@ impl<T: AsRef<Path>> Image<T> {
 
         let mut x = self.rect.bottom_left.x;
 
-        while x <= self.rect.upper_right.x {
+        while x <= self.rect.top_right.x {
             let y = func(x);
             if let Some(y) = y {
-                self.draw_point_with_color(Point::new(x, y), color, false, false);
+                self.draw_point_with_color(Point::new(x, y), color, false, true);
             }
             x += GRAPH_X_STEP;
         }
     }
 
-    pub fn draw_axises(&mut self, color: Option<Color>) {
+    pub fn draw_axis(&mut self, axis: Axis, symbol: Option<CharSymbol>, color: Option<Color>) {
         let color = color.unwrap_or_else(|| Color::hex("#000000", 0.3));
 
-        let mut x = self.rect.bottom_left.x;
-        while x <= self.rect.upper_right.x {
-            self.draw_point_with_color(Point::new(x, 0.0), color, false, false);
-            x += 1.0;
-        }
+        match axis {
+            Axis::X => {
+                let mut x = self.rect.bottom_left.x;
+                while x <= self.rect.top_right.x {
+                    self.draw_point_with_color(Point::new(x, 0.0), color, false, true);
+                    x += 1.0;
+                }
 
-        let mut y = self.rect.bottom_left.y;
-        while y <= self.rect.upper_right.y {
-            self.draw_point_with_color(Point::new(0.0, y), color, false, false);
-            y += 1.0;
+                self.draw_symbol(
+                    self.rect
+                        .get_position(FixedPosition::MiddleRight(-8.0, 2.0)),
+                    color,
+                    symbol.unwrap_or(CharSymbol::get('X')),
+                )
+            }
+            Axis::Y => {
+                let mut y = self.rect.bottom_left.y;
+                while y <= self.rect.top_right.y {
+                    self.draw_point_with_color(Point::new(0.0, y), color, false, true);
+                    y += 1.0;
+                }
+
+                self.draw_symbol(
+                    self.rect.get_position(FixedPosition::TopMiddle(2.0, -6.0)),
+                    color,
+                    symbol.unwrap_or(CharSymbol::get('Y')),
+                );
+            }
+            Axis::Other(func) => {
+                let symbol_point_y = func(self.rect.top_right.x - 5.0)
+                    .unwrap_or(0.0)
+                    .clamp(self.rect.bottom_left.y, self.rect.top_right.y)
+                    .sub(9.0)
+                    .clamp(self.rect.bottom_left.y, self.rect.top_right.y);
+                let symbol_point = Point::new(self.rect.top_right.x - 9.0, symbol_point_y);
+
+                self.draw_symbol(symbol_point, color, symbol.unwrap_or(CharSymbol::get('Z')));
+
+                self.draw_graph(&func, Some(color));
+            }
+        }
+    }
+
+    pub fn write<K: AsRef<str>>(&mut self, bottom_left: Point, text: K, color: Option<Color>) {
+        let mut point = bottom_left.clone();
+        let color = color.unwrap_or_else(|| Color::hex("#000000", 1.0));
+        for char in text.as_ref().chars() {
+            let symbol = CharSymbol::get(char);
+            self.draw_symbol(point, color, symbol);
+            point.x += (symbol.width() + 1) as f32;
+        }
+    }
+
+    pub fn draw_symbol(&mut self, bottom_left: Point, color: Color, symbol: CharSymbol) {
+        let mut point = bottom_left.clone();
+        for line in symbol.0.lines().rev() {
+            point.x = bottom_left.x;
+            let mut touched_line = false;
+            for char in line.chars() {
+                if char != '\n' {
+                    touched_line = true;
+                }
+                if char != ' ' && char != '\n' {
+                    self.draw_point_with_color(point, color, false, true);
+                }
+                point.x += 1.0;
+            }
+            if touched_line {
+                point.y += 1.0;
+            }
         }
     }
 

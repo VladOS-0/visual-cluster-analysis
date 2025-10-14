@@ -1,7 +1,8 @@
 use std::io::stdin;
 
 use crate::{
-    geometry::{Point, Rectangular},
+    geometry::{Point, Rectangle},
+    utils::RoundToDecimalPlaces,
     visual::Image,
 };
 
@@ -10,7 +11,7 @@ const DEFAULT_POINT_AMOUNT: usize = 1000;
 pub fn execute() {
     let point_amount = dialogue();
 
-    let boundary = Rectangular::default();
+    let boundary = Rectangle::default();
 
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/k_mean.png",
@@ -35,7 +36,12 @@ pub fn execute() {
             class_center = Some(point);
             min_distance = Some(distance);
         }
-        println!("{}: {} | Расстояние до центра: {}", i, point, distance);
+        println!(
+            "{}: {} | Расстояние до центра: {}",
+            i,
+            point,
+            distance.round_to_dp(2)
+        );
     }
 
     if class_center.is_none() || min_distance.is_none() {

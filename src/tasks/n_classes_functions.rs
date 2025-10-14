@@ -1,6 +1,10 @@
 use std::io::stdin;
 
-use crate::{geometry::Rectangular, utils::rand_f32_in_range, visual::Image};
+use crate::{
+    geometry::{Axis, Point, Rectangle},
+    utils::rand_f32_in_range,
+    visual::Image,
+};
 
 const DEFAULT_POINTS_COUNT: usize = 1000;
 const DEFAULT_CLASSES_COUNT: usize = 5;
@@ -14,7 +18,7 @@ const MAX_COEFF: f32 = 3.0;
 pub fn execute() {
     let (points_count, classes_count) = dialogue();
 
-    let boundary = Rectangular::default();
+    let boundary = Rectangle::default();
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/n_classes_functions.png",
         boundary.clone(),
@@ -23,11 +27,12 @@ pub fn execute() {
         None,
     );
 
-    drawing.draw_axises(None);
+    drawing.draw_axis(Axis::X, None, None);
+    drawing.draw_axis(Axis::Y, None, None);
 
     println!("Границы: {} \n\nРазделяющие функции:", boundary);
 
-    let mut classes: Vec<(f32, f32, f32)> = Vec::with_capacity(classes_count);
+    let mut classes: Vec<(f32, f32, f32, Vec<Point>)> = Vec::with_capacity(classes_count);
 
     for i in 1..=classes_count {
         let w_0 = rand_f32_in_range(MIN_FREE_COEFF, MAX_FREE_COEFF, 2);
@@ -36,43 +41,55 @@ pub fn execute() {
 
         println!("{}. f(x, y) = {} + {}x + {}y", i, w_0, w_1, w_2);
 
-        drawing.draw_graph(move |x: f32| Some((w_0 + w_1 * x) / -w_2), None);
-        classes.push((w_0, w_1, w_2));
+        //drawing.draw_graph(move |x: f32| Some((w_0 + w_1 * x) / -w_2), None);
+        classes.push((w_0, w_1, w_2, Vec::new()));
     }
     println!("-------------------------");
 
-    for i in 1..=points_count {
+    for _ in 0..points_count {
         let new_point = boundary.create_rand_point();
-        println!("№{} {}", i, new_point);
 
         let mut chosen_class: usize = 0;
         let mut highest_score = f32::MIN;
 
-        for j in 1..=classes.len() {
-            let dividing_function_result =
-                classes[j - 1].0 + classes[j - 1].1 * new_point.x + classes[j - 1].2 * new_point.y;
-            println!(
-                "{}. f(x, y) = {} + {} * {} + {} * {} = {}",
-                j,
-                classes[j - 1].0,
-                classes[j - 1].1,
-                new_point.x,
-                classes[j - 1].2,
-                new_point.y,
-                dividing_function_result
-            );
+        for (index, (w_0, w_1, w_2, _)) in classes.iter().enumerate() {
+            let dividing_function_result = w_0 + w_1 * new_point.x + w_2 * new_point.y;
             if dividing_function_result > highest_score {
                 highest_score = dividing_function_result;
-                chosen_class = j;
+                chosen_class = index;
             }
         }
-        println!("Присвоен класс - {}", chosen_class);
+        classes[chosen_class].3.push(new_point);
         drawing.draw_point_with_class(new_point, chosen_class, false, true);
     }
 
-    println!("-------------------------\nРазделяющие функции:");
-    for (i, (w_0, w_1, w_2)) in classes.iter().enumerate() {
-        println!("{}. f(x, y) = {} + {}x + {}y", i, w_0, w_1, w_2);
+    for (index, (w_0, w_1, w_2, points)) in classes.iter().enumerate() {
+        println!("\nКЛАСС {} -------------------------", index + 1);
+        println!("f(x, y) = {} + {}x + {}y", w_0, w_1, w_2);
+        println!("\nТОЧКИ:");
+        for (point_index, point) in points.iter().enumerate() {
+            println!("№{} {}", point_index + 1, point);
+            for (class_function_index, (w_0, w_1, w_2, _)) in classes.iter().enumerate() {
+                let dividing_function_result = w_0 + w_1 * point.x + w_2 * point.y;
+                let winner_string = if class_function_index == index {
+                    " (ВЫБРАН)".to_string()
+                } else {
+                    String::new()
+                };
+
+                println!(
+                    "{}. f(x, y) = {} + {} * {} + {} * {} = {}{}",
+                    class_function_index + 1,
+                    w_0,
+                    w_1,
+                    point.x,
+                    w_2,
+                    point.y,
+                    dividing_function_result,
+                    winner_string
+                );
+            }
+        }
     }
 
     drawing.save();

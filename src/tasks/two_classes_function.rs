@@ -1,6 +1,10 @@
 use std::io::stdin;
 
-use crate::{geometry::Rectangular, utils::rand_f32_in_range, visual::Image};
+use crate::{
+    geometry::{Axis, Point, Rectangle},
+    utils::{RoundToDecimalPlaces, rand_f32_in_range},
+    visual::Image,
+};
 
 const DEFAULT_POINTS_COUNT: usize = 1000;
 
@@ -13,7 +17,7 @@ const MAX_COEFF: f32 = 5.0;
 pub fn execute() {
     let points_count = dialogue();
 
-    let boundary = Rectangular::default();
+    let boundary = Rectangle::default();
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/two_classes_function.png",
         boundary.clone(),
@@ -22,7 +26,8 @@ pub fn execute() {
         None,
     );
 
-    drawing.draw_axises(None);
+    drawing.draw_axis(Axis::X, None, None);
+    drawing.draw_axis(Axis::Y, None, None);
 
     let w_0 = rand_f32_in_range(MIN_FREE_COEFF, MAX_FREE_COEFF, 2);
     let w_1 = rand_f32_in_range(MIN_COEFF, MAX_COEFF, 2);
@@ -30,7 +35,7 @@ pub fn execute() {
 
     let dividing_function = move |x: f32, y: f32| w_0 + w_1 * x + w_2 * y;
 
-    drawing.draw_graph(move |x: f32| Some((w_0 + w_1 * x) / -w_2), None);
+    drawing.draw_graph(&move |x: f32| Some((w_0 + w_1 * x) / -w_2), None);
 
     println!(
         "Границы: {} \n\nРазделяющая функция: f(x, y) = {} + {}x + {}y",
@@ -46,13 +51,17 @@ pub fn execute() {
             drawing.draw_point_with_class(new_point, 1, false, true);
             println!(
                 "{} точка: {} | Значение разделяющей функции: {} | (I класс)",
-                i, new_point, dividing_function_result
+                i,
+                new_point,
+                dividing_function_result.round_to_dp(2)
             );
         } else {
             drawing.draw_point_with_class(new_point, 2, false, true);
             println!(
                 "{} точка: {} | Значение разделяющей функции: {} | (II класс)",
-                i, new_point, dividing_function_result
+                i,
+                new_point,
+                dividing_function_result.round_to_dp(2)
             );
         }
     }

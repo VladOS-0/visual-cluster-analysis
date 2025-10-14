@@ -1,7 +1,8 @@
 use std::{collections::BTreeMap, io::stdin};
 
 use crate::{
-    geometry::{Point, Rectangular},
+    geometry::{Point, Rectangle},
+    utils::RoundToDecimalPlaces,
     visual::Image,
 };
 
@@ -11,7 +12,7 @@ const DEFAULT_CORES_COUNT: usize = 10;
 pub fn execute() {
     let (points_count, cores_count) = dialogue();
 
-    let boundary = Rectangular::default();
+    let boundary = Rectangle::default();
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/classification.png",
         boundary.clone(),
@@ -55,7 +56,7 @@ pub fn execute() {
                 "{}: {} | Расстояние до центра класса: {}",
                 point_num,
                 point,
-                point.distance_to(*class.0)
+                point.distance_to(*class.0).round_to_dp(2)
             );
             point_num += 1;
         }
