@@ -1,3 +1,5 @@
+pub const AVAILABLE_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .";
+
 pub const SYMBOL_WIDTH: usize = 6;
 pub const SYMBOL_HEIGHT: usize = 5;
 
@@ -74,6 +76,7 @@ impl CharSymbol {
             '9' => Self(NINE),
             // Punctuation
             ' ' => Self(BACKSPACE),
+            '.' => Self(POINT),
             // Unknown char
             _ => Self(UNKNOWN),
         }
@@ -82,12 +85,11 @@ impl CharSymbol {
 
 #[cfg(test)]
 mod tests {
-    use crate::font::{CharSymbol, SYMBOL_HEIGHT, SYMBOL_WIDTH, UNKNOWN};
+    use crate::font::{AVAILABLE_CHARS, CharSymbol, SYMBOL_HEIGHT, SYMBOL_WIDTH, UNKNOWN};
 
     #[test]
     fn chars_consistency() {
-        let tested_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
-        for char in tested_chars.chars() {
+        for char in AVAILABLE_CHARS.chars() {
             let symbol = CharSymbol::get(char);
             assert_ne!(symbol.0, UNKNOWN);
             assert_eq!(
@@ -381,3 +383,10 @@ const BACKSPACE: &str = "
       
       
       ";
+
+pub const POINT: &str = "
+      
+      
+      
+      
+  ■■  ";

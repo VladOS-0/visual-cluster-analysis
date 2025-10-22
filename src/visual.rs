@@ -12,8 +12,8 @@ use image::{
 
 use crate::{
     font::CharSymbol,
-    geometry::{Axis, FixedPosition, Point, Rectangle},
-    utils::rand_f32_in_range,
+    geometry::{Axis, Point, Rectangle},
+    utils::rand_isize_in_range,
 };
 
 const MAX_IMAGE_DIMENSION: u32 = 5_000;
@@ -353,8 +353,7 @@ impl<T: AsRef<Path>> Image<T> {
                 }
 
                 self.draw_symbol(
-                    self.rect
-                        .get_position(FixedPosition::MiddleRight(-8.0, 2.0)),
+                    Point::new(self.rect.top_right.x - 7.0, 3.0),
                     color,
                     symbol.unwrap_or(CharSymbol::get('X')),
                 )
@@ -367,7 +366,7 @@ impl<T: AsRef<Path>> Image<T> {
                 }
 
                 self.draw_symbol(
-                    self.rect.get_position(FixedPosition::TopMiddle(2.0, -6.0)),
+                    Point::new(3.0, self.rect.top_right.y - 7.0),
                     color,
                     symbol.unwrap_or(CharSymbol::get('Y')),
                 );
@@ -506,26 +505,26 @@ impl Color {
         if self.inner.0[0] >= 30 {
             self.inner.0[0] -= 30;
         } else {
-            self.inner.0[0] = rand_f32_in_range(0.0, self.inner.0[0] as f32, 0) as u8
+            self.inner.0[0] = rand_isize_in_range(0, self.inner.0[0] as isize) as u8;
         }
 
         if self.inner.0[1] >= 30 {
             self.inner.0[1] -= 30;
         } else {
-            self.inner.0[1] = rand_f32_in_range(0.0, self.inner.0[2] as f32, 0) as u8
+            self.inner.0[1] = rand_isize_in_range(0, self.inner.0[1] as isize) as u8;
         }
 
         if self.inner.0[2] >= 30 {
             self.inner.0[2] -= 30;
         } else {
-            self.inner.0[2] = rand_f32_in_range(0.0, self.inner.0[2] as f32, 0) as u8
+            self.inner.0[2] = rand_isize_in_range(0, self.inner.0[2] as isize) as u8;
         }
     }
 
     pub fn rand() -> Self {
-        let r = rand_f32_in_range(0.0, 255.0, 0) as u8;
-        let g = rand_f32_in_range(0.0, 255.0, 0) as u8;
-        let b = rand_f32_in_range(0.0, 255.0, 0) as u8;
+        let r = rand_isize_in_range(0, 255) as u8;
+        let g = rand_isize_in_range(0, 255) as u8;
+        let b = rand_isize_in_range(0, 255) as u8;
         Self::rgba(r, g, b, (POINT_ALPHA * 255.0) as u8)
     }
 

@@ -1,7 +1,7 @@
 use std::io::stdin;
 
 use crate::{
-    geometry::{Axis, Point, Rectangle},
+    geometry::{Axis, Rectangle},
     utils::{RoundToDecimalPlaces, rand_f32_in_range},
     visual::Image,
 };
