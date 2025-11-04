@@ -1,12 +1,16 @@
-use std::{io::stdin, process::exit};
+use std::{io::stdin, process::exit, time::Instant};
 
-use crate::tasks::{
-    classification, hierarchy_grouping, k_mean, n_classes_functions, two_classes_function,
+use crate::{
+    tasks::{
+        classification, hierarchy_grouping, k_mean, n_classes_functions, two_classes_function,
+    },
+    utils::RoundToDecimalPlaces,
 };
 
 #[allow(non_upper_case_globals)]
 pub mod font;
 pub mod geometry;
+pub mod random;
 pub mod tasks;
 pub mod utils;
 pub mod visual;
@@ -20,6 +24,9 @@ pub fn interactive() {
             .expect("Не удалось прочитать из стандартного ввода.");
         let index = buf.trim().parse::<usize>();
         if let Ok(index) = index {
+            let start = Instant::now();
+            print!("{esc}c", esc = 27 as char);
+            println!("-------ЗАДАНИЕ {}-------", index);
             match index {
                 0 => {
                     println!("Работа программы завершена");
@@ -45,6 +52,20 @@ pub fn interactive() {
                     eprintln!("---------------------------------");
                     continue;
                 }
+            }
+
+            if start.elapsed().as_millis() > 100 {
+                println!(
+                    "Задание {} завершено за {}s",
+                    index,
+                    start.elapsed().as_secs_f32().round_to_dp(2),
+                );
+            } else {
+                println!(
+                    "Задание {} завершено за {}ms",
+                    index,
+                    start.elapsed().as_millis(),
+                );
             }
         } else {
             eprintln!("Введено неправильное число.");

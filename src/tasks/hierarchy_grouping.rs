@@ -6,22 +6,34 @@ use std::{
 
 use crate::{
     geometry::{Axis, Point, Rectangle},
-    utils::{rand_f32_in_range, rand_f32_in_range_with_distance},
-    visual::Image,
+    random::Random,
+    visual::{Color, Image},
 };
 
 type ElementId = usize;
 
 const DEFAULT_ELEMENTS_COUNT: usize = 5;
 
-const MIN_POINTS_DISTANCE: f32 = 0.5;
-const DISTANCE_BETWEEN_VALUES: f32 = 0.5;
-const MAX_POINTS_DISTANCE: f32 = 5.0;
+const MIN_POINTS_DISTANCE: f32 = 0.4;
+const DISTANCE_BETWEEN_VALUES: f32 = 0.2;
+const MAX_POINTS_DISTANCE: f32 = 10.0;
+
+const VISUAL_POINTS_DISTANCE: f32 = 40.0;
+
+/// На графике по оси Y точки будут располагаться на расстоянии MIN_POINTS_DISTANCE * VISUAL_DISTANCE_MULTIPLIER
+const VISUAL_DISTANCE_MULTIPLIER: f32 = 40.0;
+
+const BIAS_MULT: f32 = 3.0;
+const BIAS_PROB: f32 = 0.7;
+const BIAS_START: f32 = MIN_POINTS_DISTANCE;
+const BIAS_END: f32 = MIN_POINTS_DISTANCE + (MAX_POINTS_DISTANCE - MIN_POINTS_DISTANCE) / 2.0;
+
+const CACHE_REGENERATE_ATTEMPTS: usize = 5;
 
 #[derive(Clone, Debug)]
 struct Hierarchy {
     pub objects: BTreeMap<ElementId, HierarchyObject>,
-    pub element_count: usize,
+    pub max_element_id: usize,
 }
 
 impl Display for Hierarchy {
@@ -58,24 +70,59 @@ impl Hierarchy {
     fn new() -> Self {
         Self {
             objects: BTreeMap::new(),
-            element_count: 0,
+            max_element_id: 0,
         }
     }
 
     fn populate(&mut self, count: usize) {
-        self.element_count = count;
+        self.max_element_id = count;
         for i in 1..=count {
             self.objects.insert(i, HierarchyObject::leaf(i));
         }
     }
 
-    fn init_rand_distances(&mut self) {
+    fn init_rand_distances(&mut self, mut image: Option<&mut Image>) {
         let keys: Vec<ElementId> = self.objects.keys().map(|id_ref| *id_ref).collect();
         let mut cached_distances: HashMap<(ElementId, ElementId), f32> = HashMap::new();
 
         for i in 1..=self.objects.len() {
             let obj = self.objects.get_mut(&i).unwrap();
             obj.init_rand_distances(&keys, &mut cached_distances);
+
+            if image.is_some() {
+                let image = image.as_deref_mut().unwrap();
+                let point_position = Point::new(i as f32 * VISUAL_POINTS_DISTANCE + 10.0, 0.0);
+
+                // нарисовать засечку
+                image.draw_line(
+                    point_position.y_offset(-3.0),
+                    point_position.y_offset(3.0),
+                    None,
+                );
+
+                image.write(point_position.offset(-4.0, -8.0), format!("X{}", i), None);
+            }
+        }
+
+        if image.is_some() {
+            let image = image.as_deref_mut().unwrap();
+            for distance in cached_distances.values() {
+                let distance_point_position =
+                    Point::new(0.0, distance * VISUAL_DISTANCE_MULTIPLIER);
+
+                // нарисовать засечку
+                image.draw_line(
+                    distance_point_position.x_offset(-3.0),
+                    distance_point_position.x_offset(3.0),
+                    None,
+                );
+
+                image.write(
+                    distance_point_position.offset(-25.0, -2.0),
+                    distance.to_string(),
+                    None,
+                );
+            }
         }
     }
 
@@ -96,9 +143,9 @@ impl Hierarchy {
             let first_pair_obj = self.objects.remove(&current_pair.0).unwrap();
             let second_pair_obj = self.objects.remove(&current_pair.1).unwrap();
 
-            self.element_count += 1;
+            self.max_element_id += 1;
             let mut new_node =
-                HierarchyObject::fold(self.element_count, first_pair_obj, second_pair_obj);
+                HierarchyObject::fold(self.max_element_id, first_pair_obj, second_pair_obj);
 
             for object in self.objects.values_mut() {
                 object.distances.remove(&current_pair.0);
@@ -106,8 +153,28 @@ impl Hierarchy {
             }
             new_node.calculate_all_distances(&mut self.objects);
 
-            self.objects.insert(self.element_count, new_node);
+            self.objects.insert(self.max_element_id, new_node);
         }
+    }
+
+    fn tree_display(&self) {
+        if self.objects.len() != 1 {
+            panic!(
+                "Hierarchy has {} top-level elements instead of 1! It is empty or not yet assembled!",
+                self.objects.len()
+            );
+        }
+        self.objects.first_key_value().unwrap().1.tree_display();
+    }
+
+    fn draw(&self, drawing: &mut Image) {
+        if self.objects.len() != 1 {
+            panic!(
+                "Hierarchy has {} top-level elements instead of 1! It is empty or not yet assembled!",
+                self.objects.len()
+            );
+        }
+        self.objects.first_key_value().unwrap().1.draw(drawing);
     }
 }
 
@@ -116,6 +183,7 @@ struct HierarchyObject {
     pub id: ElementId,
     pub inner: InnerHierarchyObject,
     pub distances: BTreeMap<ElementId, f32>,
+    pub self_distance: Option<f32>,
 }
 impl HierarchyObject {
     fn leaf(id: ElementId) -> Self {
@@ -123,6 +191,7 @@ impl HierarchyObject {
             id,
             inner: InnerHierarchyObject::Leaf,
             distances: BTreeMap::new(),
+            self_distance: None,
         }
     }
     fn init_rand_distances(
@@ -130,18 +199,21 @@ impl HierarchyObject {
         elements: &Vec<ElementId>,
         cached_distances: &mut HashMap<(ElementId, ElementId), f32>,
     ) {
+        let cache: Vec<f32> = cached_distances.values().cloned().collect();
         for id in elements {
             if *id == self.id {
                 self.distances.insert(*id, 0.0);
             } else if let Some(cached_distance) = cached_distances.get(&(*id, self.id)) {
                 self.distances.insert(*id, *cached_distance);
             } else {
-                let random_distance = rand_f32_in_range_with_distance(
-                    MIN_POINTS_DISTANCE,
-                    MAX_POINTS_DISTANCE,
-                    DISTANCE_BETWEEN_VALUES,
-                    1,
-                );
+                let random_distance = Random::new()
+                    .range(MIN_POINTS_DISTANCE, MAX_POINTS_DISTANCE)
+                    .distance(DISTANCE_BETWEEN_VALUES)
+                    .bias(BIAS_MULT, BIAS_PROB, Some(BIAS_START), Some(BIAS_END))
+                    .cache(&cache, CACHE_REGENERATE_ATTEMPTS)
+                    .to_dp(1)
+                    .generate();
+
                 cached_distances.insert((self.id, *id), random_distance);
                 self.distances.insert(*id, random_distance);
             }
@@ -174,6 +246,7 @@ impl HierarchyObject {
             id,
             inner: InnerHierarchyObject::Node(Box::new((first, second, distance_between))),
             distances: BTreeMap::new(),
+            self_distance: Some(distance_between),
         }
     }
 
@@ -189,7 +262,7 @@ impl HierarchyObject {
                     InnerHierarchyObject::Leaf => "ЛИСТ",
                 };
                 println!(
-                    "УЗЕЛ: {} - Расстояние: {}; Составляющие: {} {} - {} {}",
+                    "УЗЕЛ: {} - Расстояние: {}; Составляющие: {} {} + {} {}",
                     self.id,
                     node.2,
                     first_member_prefix,
@@ -203,6 +276,47 @@ impl HierarchyObject {
             InnerHierarchyObject::Leaf => {}
         }
     }
+
+    fn draw(&self, drawing: &mut Image) -> Point {
+        let color = Color::rand();
+        let (first_leg, second_leg) = match &self.inner {
+            InnerHierarchyObject::Node(node) => (node.0.draw(drawing), node.1.draw(drawing)),
+            InnerHierarchyObject::Leaf => {
+                return Point::new(self.id as f32 * VISUAL_POINTS_DISTANCE + 10.0, 0.0);
+            }
+        };
+
+        drawing.draw_polyline(
+            vec![
+                first_leg,
+                Point::new(
+                    first_leg.x,
+                    self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+                ),
+                Point::new(
+                    second_leg.x,
+                    self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+                ),
+                second_leg,
+            ],
+            Some(color),
+        );
+
+        let hierarchy_center = Point::new(
+            first_leg.x
+                + (second_leg.x - first_leg.x) / Random::new().range(1.4, 2.8).to_dp(3).generate(),
+            self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+        );
+
+        // draw hierarchy id
+        drawing.write(
+            hierarchy_center.offset(-3.0, -5.0),
+            self.id.to_string(),
+            Some(color),
+        );
+
+        hierarchy_center
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -214,7 +328,10 @@ enum InnerHierarchyObject {
 pub fn execute() {
     let elements_count = dialogue();
 
-    let boundary = Rectangle::new(Point::new(-10.0, -10.0), Point::new(190.0, 190.0));
+    let boundary = Rectangle::new(
+        Point::new(-30.0, -10.0),
+        Point::new(50.0 + elements_count as f32 * 50.0, 430.0),
+    );
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/hierarchy_grouping.png",
         boundary.clone(),
@@ -226,11 +343,11 @@ pub fn execute() {
     drawing.draw_axis(Axis::X, None, None);
     drawing.draw_axis(Axis::Y, None, None);
 
-    println!("Границы: {} \n\n:", boundary);
+    println!("Границы: {} \n\n", boundary);
 
     let mut hierarchy = Hierarchy::new();
     hierarchy.populate(elements_count);
-    hierarchy.init_rand_distances();
+    hierarchy.init_rand_distances(Some(&mut drawing));
 
     println!("Исходные расстояния:");
     println!("{}", hierarchy);
@@ -238,15 +355,12 @@ pub fn execute() {
     hierarchy.assemble();
 
     println!("Получившаяся иерархия: ");
-    hierarchy
-        .objects
-        .first_entry()
-        .unwrap()
-        .get()
-        .tree_display();
+    hierarchy.tree_display();
+
+    hierarchy.draw(&mut drawing);
 
     drawing.save();
-    //drawing.show("gimp");
+    drawing.show("gimp");
 }
 
 fn dialogue() -> usize {

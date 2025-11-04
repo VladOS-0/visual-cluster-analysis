@@ -20,6 +20,19 @@ impl Point {
     pub fn distance_to(self, other: Point) -> f32 {
         f32::sqrt(f32::powi(self.x - other.x, 2) + f32::powi(self.y - other.y, 2))
     }
+
+    #[must_use = "This is a builder function, dumbass"]
+    pub fn offset(&self, x_offset: f32, y_offset: f32) -> Self {
+        Point::new(self.x + x_offset, self.y + y_offset)
+    }
+    #[must_use = "This is a builder function, dumbass"]
+    pub fn x_offset(&self, offset: f32) -> Self {
+        Point::new(self.x + offset, self.y)
+    }
+    #[must_use = "This is a builder function, dumbass"]
+    pub fn y_offset(&self, offset: f32) -> Self {
+        Point::new(self.x, self.y + offset)
+    }
 }
 
 impl std::fmt::Display for Point {

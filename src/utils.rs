@@ -39,39 +39,29 @@ pub fn rand_isize_in_range(min: isize, max: isize) -> isize {
     rand_f32_in_range(min as f32, max as f32, 0) as isize
 }
 
-pub trait RandGet {
-    type Element;
-
-    fn rand_get<'a>(&'a self) -> Option<&'a Self::Element>;
-
-    fn rand_get_mut<'a>(&'a mut self) -> Option<&'a mut Self::Element>;
-
-    fn rand_index<'a>(&'a self) -> Option<usize>;
+pub trait Cache<Element: PartialEq> {
+    fn find_in_cache<'a>(&'a self, sought: Element) -> Option<&'a Element>;
 }
 
-impl<T> RandGet for Vec<T> {
-    type Element = T;
-
-    fn rand_get<'a>(&'a self) -> Option<&'a Self::Element> {
-        if self.is_empty() {
-            return None;
-        }
-        self.get(rand_isize_in_range(0, (self.len() - 1) as isize) as usize)
+impl<Element: PartialEq, T: AsRef<[Element]>> Cache<Element> for T {
+    fn find_in_cache<'a>(&'a self, sought: Element) -> Option<&'a Element> {
+        self.as_ref().iter().find(|element| **element == sought)
     }
+}
 
-    fn rand_get_mut<'a>(&'a mut self) -> Option<&'a mut Self::Element> {
-        if self.is_empty() {
-            return None;
-        }
-        let self_len = self.len();
-        self.get_mut(rand_isize_in_range(0, (self_len - 1) as isize) as usize)
-    }
+pub trait CacheWithPredicate<Element> {
+    fn predicate_find_in_cache<'a, P: FnMut(&&Element) -> bool>(
+        &'a self,
+        predicate: P,
+    ) -> Option<&'a Element>;
+}
 
-    fn rand_index<'a>(&'a self) -> Option<usize> {
-        if self.is_empty() {
-            return None;
-        }
-        Some(rand_isize_in_range(0, (self.len() - 1) as isize) as usize)
+impl<Element, T: AsRef<[Element]>> CacheWithPredicate<Element> for T {
+    fn predicate_find_in_cache<'a, P: FnMut(&&Element) -> bool>(
+        &'a self,
+        predicate: P,
+    ) -> Option<&'a Element> {
+        self.as_ref().iter().find(predicate)
     }
 }
 

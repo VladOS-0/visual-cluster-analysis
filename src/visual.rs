@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     ops::Sub,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, exit},
 };
 
@@ -25,14 +25,14 @@ const POINT_ALPHA: f32 = 1.0;
 const FILLING_COLOR: &str = "#FFFFFF";
 const FILLING_ALPHA: f32 = 1.0;
 
-const GRAPH_X_STEP: f32 = 0.1;
+const GRAPH_STEP: f32 = 0.01;
 
 /// Class ID - (Core Color, Point Color)
 type ClassColors = HashMap<usize, (Color, Color)>;
 
 #[derive(Clone)]
-pub struct Image<T: AsRef<Path>> {
-    path: T,
+pub struct Image {
+    path: PathBuf,
     inner: RgbaImage,
     rect: Rectangle,
     class_colors: ClassColors,
@@ -41,8 +41,8 @@ pub struct Image<T: AsRef<Path>> {
     final_height: u32,
 }
 
-impl<T: AsRef<Path>> Image<T> {
-    pub fn new(
+impl Image {
+    pub fn new<T: AsRef<Path>>(
         path: T,
         rect: Rectangle,
         fill: bool,
@@ -119,7 +119,7 @@ impl<T: AsRef<Path>> Image<T> {
         let class_colors = Self::init_default_colors();
 
         Self {
-            path,
+            path: path.as_ref().to_path_buf(),
             inner,
             rect,
             class_colors,
@@ -324,6 +324,53 @@ impl<T: AsRef<Path>> Image<T> {
         *pixel = color.inner();
     }
 
+    pub fn draw_polyline<K: AsRef<[Point]>>(&mut self, points: K, color: Option<Color>) {
+        for points in points.as_ref().windows(2) {
+            self.draw_line(points[0], points[1], color);
+        }
+    }
+
+    pub fn draw_line(&mut self, first: Point, second: Point, color: Option<Color>) {
+        let color = color.unwrap_or_else(|| Color::hex("#000000", 1.0));
+
+        let x_absolute_difference = (second.x - first.x).abs();
+        let y_absolute_difference = (second.y - first.y).abs();
+
+        let tan_of_angle_near_first = y_absolute_difference / x_absolute_difference;
+
+        if x_absolute_difference <= GRAPH_STEP * 100.0 {
+            for y in first.y.min(second.y) as isize..first.y.max(second.y) as isize {
+                let point = Point::new(first.x, y as f32);
+                self.draw_point_with_color(point, color, false, true);
+            }
+        }
+
+        let mut x = first.x;
+        if first.x > second.x {
+            while x >= second.x {
+                let y_step_difference = (first.x - x) * tan_of_angle_near_first;
+                let y = if first.y > second.y {
+                    first.y - y_step_difference
+                } else {
+                    first.y + y_step_difference
+                };
+                self.draw_point_with_color(Point::new(x, y), color, true, true);
+                x -= GRAPH_STEP;
+            }
+        } else {
+            while x <= second.x {
+                let y_step_difference = (first.x + x) * tan_of_angle_near_first;
+                let y = if first.y > second.y {
+                    first.y - y_step_difference
+                } else {
+                    first.y + y_step_difference
+                };
+                self.draw_point_with_color(Point::new(x, y), color, true, true);
+                x += GRAPH_STEP;
+            }
+        }
+    }
+
     pub fn draw_graph<K>(&mut self, func: &K, color: Option<Color>)
     where
         K: Fn(f32) -> Option<f32>,
@@ -337,7 +384,7 @@ impl<T: AsRef<Path>> Image<T> {
             if let Some(y) = y {
                 self.draw_point_with_color(Point::new(x, y), color, false, true);
             }
-            x += GRAPH_X_STEP;
+            x += GRAPH_STEP;
         }
     }
 
@@ -426,20 +473,20 @@ impl<T: AsRef<Path>> Image<T> {
                 FilterType::Nearest,
             );
 
-            let result = resized_image.save(self.path.as_ref());
+            let result = resized_image.save(&self.path);
             if let Err(err) = result {
                 eprintln!(
                     "ОШИБКА: Не удалось сохранить изображение по пути {}: {}",
-                    self.path.as_ref().to_string_lossy(),
+                    self.path.to_string_lossy(),
                     err
                 );
             }
         } else {
-            let result = self.inner.save(self.path.as_ref());
+            let result = self.inner.save(&self.path);
             if let Err(err) = result {
                 eprintln!(
                     "ОШИБКА: Не удалось сохранить изображение по пути {}: {}",
-                    self.path.as_ref().to_string_lossy(),
+                    self.path.to_string_lossy(),
                     err
                 );
             }
@@ -447,17 +494,17 @@ impl<T: AsRef<Path>> Image<T> {
 
         println!(
             "Изображение сохранено по пути {}",
-            self.path.as_ref().to_string_lossy()
+            self.path.to_string_lossy()
         );
     }
 
     pub fn show(&self, command: &str) {
-        let result = Command::new(command).arg(self.path.as_ref()).spawn();
+        let result = Command::new(command).arg(&self.path).spawn();
 
         if let Err(err) = result {
             eprintln!(
                 "ОШИБКА: Не удалось открыть изображение по пути {} с помощью команды {}: {}",
-                self.path.as_ref().to_string_lossy(),
+                self.path.to_string_lossy(),
                 command,
                 err
             );
