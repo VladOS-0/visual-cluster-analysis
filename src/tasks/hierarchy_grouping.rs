@@ -83,11 +83,12 @@ impl Hierarchy {
 
     fn init_rand_distances(&mut self, mut image: Option<&mut Image>) {
         let keys: Vec<ElementId> = self.objects.keys().map(|id_ref| *id_ref).collect();
-        let mut cached_distances: HashMap<(ElementId, ElementId), f32> = HashMap::new();
+        let mut cached_pairs: HashMap<(ElementId, ElementId), f32> = HashMap::new();
+        let mut cached_distances: Vec<f32> = Vec::new();
 
         for i in 1..=self.objects.len() {
             let obj = self.objects.get_mut(&i).unwrap();
-            obj.init_rand_distances(&keys, &mut cached_distances);
+            obj.init_rand_distances(&keys, &mut cached_pairs, &mut cached_distances);
 
             if image.is_some() {
                 let image = image.as_deref_mut().unwrap();
@@ -106,7 +107,7 @@ impl Hierarchy {
 
         if image.is_some() {
             let image = image.as_deref_mut().unwrap();
-            for distance in cached_distances.values() {
+            for distance in cached_distances {
                 let distance_point_position =
                     Point::new(0.0, distance * VISUAL_DISTANCE_MULTIPLIER);
 
@@ -197,24 +198,33 @@ impl HierarchyObject {
     fn init_rand_distances(
         &mut self,
         elements: &Vec<ElementId>,
-        cached_distances: &mut HashMap<(ElementId, ElementId), f32>,
+        cached_pairs: &mut HashMap<(ElementId, ElementId), f32>,
+        cached_distances: &mut Vec<f32>,
     ) {
-        let cache: Vec<f32> = cached_distances.values().cloned().collect();
         for id in elements {
             if *id == self.id {
                 self.distances.insert(*id, 0.0);
-            } else if let Some(cached_distance) = cached_distances.get(&(*id, self.id)) {
+            } else if let Some(cached_distance) = cached_pairs.get(&(*id, self.id)) {
                 self.distances.insert(*id, *cached_distance);
             } else {
                 let random_distance = Random::new()
                     .range(MIN_POINTS_DISTANCE, MAX_POINTS_DISTANCE)
                     .distance(DISTANCE_BETWEEN_VALUES)
                     .bias(BIAS_MULT, BIAS_PROB, Some(BIAS_START), Some(BIAS_END))
-                    .cache(&cache, CACHE_REGENERATE_ATTEMPTS)
+                    .cache(&cached_distances, CACHE_REGENERATE_ATTEMPTS)
                     .to_dp(1)
                     .generate();
 
-                cached_distances.insert((self.id, *id), random_distance);
+                cached_pairs.insert((self.id, *id), random_distance);
+
+                if cached_distances
+                    .iter()
+                    .find(|cached| **cached == random_distance)
+                    .is_none()
+                {
+                    cached_distances.push(random_distance);
+                }
+
                 self.distances.insert(*id, random_distance);
             }
         }
