@@ -31,7 +31,7 @@ pub fn execute() {
         let point = boundary.create_rand_point();
         drawing.draw_point_with_class(point, 1, false, false);
 
-        let distance = point.distance_to(center);
+        let distance = point.distance_to(&center);
         if min_distance.is_none() || min_distance.unwrap() > distance {
             class_center = Some(point);
             min_distance = Some(distance);

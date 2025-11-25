@@ -85,7 +85,7 @@ impl<'a> Random<'a> {
 
         debug_assert!(
             if bias_range_min.is_some() && self.min.is_some() {
-                bias_range_min.as_ref().unwrap() <= self.min.as_ref().unwrap()
+                bias_range_min.as_ref().unwrap() >= self.min.as_ref().unwrap()
                     && bias_range_max.as_ref().unwrap() <= self.max.as_ref().unwrap()
             } else {
                 true

@@ -7,6 +7,7 @@ use std::{
 use crate::{
     geometry::{Axis, Point, Rectangle},
     random::Random,
+    utils::RoundToDecimalPlaces,
     visual::{Color, Image},
 };
 
@@ -18,15 +19,26 @@ const MIN_POINTS_DISTANCE: f32 = 0.4;
 const DISTANCE_BETWEEN_VALUES: f32 = 0.2;
 const MAX_POINTS_DISTANCE: f32 = 10.0;
 
+const REVERSE_MIN_POINTS_DISTANCE: f32 = 0.2;
+const REVERSE_DISTANCE_BETWEEN_VALUES: f32 = 0.1;
+const REVERSE_MAX_POINTS_DISTANCE: f32 = 1.5;
+
 const VISUAL_POINTS_DISTANCE: f32 = 40.0;
 
 /// На графике по оси Y точки будут располагаться на расстоянии MIN_POINTS_DISTANCE * VISUAL_DISTANCE_MULTIPLIER
 const VISUAL_DISTANCE_MULTIPLIER: f32 = 40.0;
+const REVERSE_VISUAL_DISTANCE_MULTIPLIER: f32 = 100.0;
+
+const BIAS_PROB: f32 = 0.7;
 
 const BIAS_MULT: f32 = 3.0;
-const BIAS_PROB: f32 = 0.7;
 const BIAS_START: f32 = MIN_POINTS_DISTANCE;
 const BIAS_END: f32 = MIN_POINTS_DISTANCE + (MAX_POINTS_DISTANCE - MIN_POINTS_DISTANCE) / 2.0;
+
+const REVERSE_BIAS_MULT: f32 = 0.2;
+const REVERSE_BIAS_START: f32 =
+    REVERSE_MIN_POINTS_DISTANCE + (REVERSE_MAX_POINTS_DISTANCE - REVERSE_MIN_POINTS_DISTANCE) / 3.0;
+const REVERSE_BIAS_END: f32 = REVERSE_MAX_POINTS_DISTANCE;
 
 const CACHE_REGENERATE_ATTEMPTS: usize = 5;
 
@@ -34,6 +46,8 @@ const CACHE_REGENERATE_ATTEMPTS: usize = 5;
 struct Hierarchy {
     pub objects: BTreeMap<ElementId, HierarchyObject>,
     pub max_element_id: usize,
+    pub points_count: usize,
+    pub reverse: bool,
 }
 
 impl Display for Hierarchy {
@@ -55,6 +69,9 @@ impl Display for Hierarchy {
             }
             for distance in object.distances.values() {
                 if *distance == distance.round() {
+                    if *distance == 0.0 {
+                        write!(f, "-    ")?;
+                    }
                     write!(f, "{}    ", distance)?;
                 } else {
                     write!(f, "{}  ", distance)?;
@@ -62,6 +79,43 @@ impl Display for Hierarchy {
             }
             write!(f, "\n")?;
         }
+
+        if self.reverse {
+            writeln!(f, "\n\n Значения до получения обратных:")?;
+            write!(f, "   ")?;
+            for id in self.objects.keys() {
+                if id / 10 < 1 {
+                    write!(f, "{}    ", id)?;
+                } else {
+                    write!(f, "{}   ", id)?;
+                }
+            }
+            write!(f, "\n")?;
+            for (id, object) in &self.objects {
+                if id / 10 < 1 {
+                    write!(f, "{}  ", id)?;
+                } else {
+                    write!(f, "{} ", id)?;
+                }
+                for distance in object
+                    .distances
+                    .values()
+                    .map(|distance| (1.0 / *distance).round_to_dp(1))
+                {
+                    if distance == distance.round() {
+                        if distance == f32::INFINITY {
+                            write!(f, "-    ")?;
+                        } else {
+                            write!(f, "{}    ", distance)?;
+                        }
+                    } else {
+                        write!(f, "{}  ", distance)?;
+                    }
+                }
+                write!(f, "\n")?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -71,11 +125,28 @@ impl Hierarchy {
         Self {
             objects: BTreeMap::new(),
             max_element_id: 0,
+            points_count: 0,
+            reverse: false,
+        }
+    }
+
+    fn reverse(self) -> Self {
+        debug_assert!(
+            self.objects.is_empty(),
+            "reverse() не модифицирует элементы иерархии, а просто помечает её так для будущей генерации. У переданной же иерархии уже есть {} элементов",
+            self.objects.len()
+        );
+
+        Self {
+            reverse: !self.reverse,
+            ..self
         }
     }
 
     fn populate(&mut self, count: usize) {
         self.max_element_id = count;
+        self.points_count = count;
+
         for i in 1..=count {
             self.objects.insert(i, HierarchyObject::leaf(i));
         }
@@ -88,7 +159,12 @@ impl Hierarchy {
 
         for i in 1..=self.objects.len() {
             let obj = self.objects.get_mut(&i).unwrap();
-            obj.init_rand_distances(&keys, &mut cached_pairs, &mut cached_distances);
+            obj.init_rand_distances(
+                &keys,
+                &mut cached_pairs,
+                &mut cached_distances,
+                self.reverse,
+            );
 
             if image.is_some() {
                 let image = image.as_deref_mut().unwrap();
@@ -108,8 +184,15 @@ impl Hierarchy {
         if image.is_some() {
             let image = image.as_deref_mut().unwrap();
             for distance in cached_distances {
-                let distance_point_position =
-                    Point::new(0.0, distance * VISUAL_DISTANCE_MULTIPLIER);
+                let distance_point_position = Point::new(
+                    0.0,
+                    distance
+                        * if self.reverse {
+                            REVERSE_VISUAL_DISTANCE_MULTIPLIER
+                        } else {
+                            VISUAL_DISTANCE_MULTIPLIER
+                        },
+                );
 
                 // нарисовать засечку
                 image.draw_line(
@@ -123,6 +206,14 @@ impl Hierarchy {
                     distance.to_string(),
                     None,
                 );
+
+                if self.reverse {
+                    image.write(
+                        distance_point_position.offset(3.0, -2.0),
+                        (1.0 / distance).round_to_dp(1).to_string(),
+                        Some(Color::hex("#8a2d1e", 1.0)),
+                    );
+                }
             }
         }
     }
@@ -175,7 +266,16 @@ impl Hierarchy {
                 self.objects.len()
             );
         }
-        self.objects.first_key_value().unwrap().1.draw(drawing);
+        //let mut drawing_order
+        self.objects
+            .first_key_value()
+            .unwrap()
+            .1
+            .draw(drawing, self.reverse);
+    }
+
+    fn assemble_drawing_queue(&self) -> BTreeMap<f32, ()> {
+        BTreeMap::new()
     }
 }
 
@@ -195,11 +295,19 @@ impl HierarchyObject {
             self_distance: None,
         }
     }
+    fn pretty_id(&self, points_count: usize) -> usize {
+        match self.inner {
+            InnerHierarchyObject::Node(_) => self.id - points_count,
+            InnerHierarchyObject::Leaf => self.id,
+        }
+    }
+
     fn init_rand_distances(
         &mut self,
         elements: &Vec<ElementId>,
         cached_pairs: &mut HashMap<(ElementId, ElementId), f32>,
         cached_distances: &mut Vec<f32>,
+        reverse: bool,
     ) {
         for id in elements {
             if *id == self.id {
@@ -207,13 +315,29 @@ impl HierarchyObject {
             } else if let Some(cached_distance) = cached_pairs.get(&(*id, self.id)) {
                 self.distances.insert(*id, *cached_distance);
             } else {
-                let random_distance = Random::new()
-                    .range(MIN_POINTS_DISTANCE, MAX_POINTS_DISTANCE)
-                    .distance(DISTANCE_BETWEEN_VALUES)
-                    .bias(BIAS_MULT, BIAS_PROB, Some(BIAS_START), Some(BIAS_END))
-                    .cache(&cached_distances, CACHE_REGENERATE_ATTEMPTS)
-                    .to_dp(1)
-                    .generate();
+                let random_distance = if reverse {
+                    (1.0 / Random::new()
+                        .range(REVERSE_MIN_POINTS_DISTANCE, REVERSE_MAX_POINTS_DISTANCE)
+                        .distance(REVERSE_DISTANCE_BETWEEN_VALUES)
+                        .bias(
+                            REVERSE_BIAS_MULT,
+                            BIAS_PROB,
+                            Some(REVERSE_BIAS_START),
+                            Some(REVERSE_BIAS_END),
+                        )
+                        .cache(&cached_distances, CACHE_REGENERATE_ATTEMPTS)
+                        .to_dp(1)
+                        .generate())
+                    .round_to_dp(1)
+                } else {
+                    Random::new()
+                        .range(MIN_POINTS_DISTANCE, MAX_POINTS_DISTANCE)
+                        .distance(DISTANCE_BETWEEN_VALUES)
+                        .bias(BIAS_MULT, BIAS_PROB, Some(BIAS_START), Some(BIAS_END))
+                        .cache(&cached_distances, CACHE_REGENERATE_ATTEMPTS)
+                        .to_dp(1)
+                        .generate()
+                };
 
                 cached_pairs.insert((self.id, *id), random_distance);
 
@@ -287,10 +411,13 @@ impl HierarchyObject {
         }
     }
 
-    fn draw(&self, drawing: &mut Image) -> Point {
+    fn draw(&self, drawing: &mut Image, reverse: bool) -> Point {
         let color = Color::rand();
+
         let (first_leg, second_leg) = match &self.inner {
-            InnerHierarchyObject::Node(node) => (node.0.draw(drawing), node.1.draw(drawing)),
+            InnerHierarchyObject::Node(node) => {
+                (node.0.draw(drawing, reverse), node.1.draw(drawing, reverse))
+            }
             InnerHierarchyObject::Leaf => {
                 return Point::new(self.id as f32 * VISUAL_POINTS_DISTANCE + 10.0, 0.0);
             }
@@ -301,11 +428,21 @@ impl HierarchyObject {
                 first_leg,
                 Point::new(
                     first_leg.x,
-                    self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+                    self.self_distance.unwrap()
+                        * if reverse {
+                            REVERSE_VISUAL_DISTANCE_MULTIPLIER
+                        } else {
+                            VISUAL_DISTANCE_MULTIPLIER
+                        },
                 ),
                 Point::new(
                     second_leg.x,
-                    self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+                    self.self_distance.unwrap()
+                        * if reverse {
+                            REVERSE_VISUAL_DISTANCE_MULTIPLIER
+                        } else {
+                            VISUAL_DISTANCE_MULTIPLIER
+                        },
                 ),
                 second_leg,
             ],
@@ -315,7 +452,12 @@ impl HierarchyObject {
         let hierarchy_center = Point::new(
             first_leg.x
                 + (second_leg.x - first_leg.x) / Random::new().range(1.4, 2.8).to_dp(3).generate(),
-            self.self_distance.unwrap() * VISUAL_DISTANCE_MULTIPLIER,
+            self.self_distance.unwrap()
+                * if reverse {
+                    REVERSE_VISUAL_DISTANCE_MULTIPLIER
+                } else {
+                    VISUAL_DISTANCE_MULTIPLIER
+                },
         );
 
         // draw hierarchy id
@@ -336,11 +478,11 @@ enum InnerHierarchyObject {
 }
 
 pub fn execute() {
-    let elements_count = dialogue();
+    let (elements_count, reverse) = dialogue();
 
     let boundary = Rectangle::new(
         Point::new(-30.0, -10.0),
-        Point::new(50.0 + elements_count as f32 * 50.0, 430.0),
+        Point::new(50.0 + elements_count as f32 * 50.0, 550.0),
     );
     let mut drawing = Image::new(
         "/home/vlad0s/Изображения/Misc/labs/hierarchy_grouping.png",
@@ -355,11 +497,16 @@ pub fn execute() {
 
     println!("Границы: {} \n\n", boundary);
 
-    let mut hierarchy = Hierarchy::new();
+    let mut hierarchy = if reverse {
+        Hierarchy::new().reverse()
+    } else {
+        Hierarchy::new()
+    };
+
     hierarchy.populate(elements_count);
     hierarchy.init_rand_distances(Some(&mut drawing));
 
-    println!("Исходные расстояния:");
+    println!("Сгенерированные расстояния:");
     println!("{}", hierarchy);
 
     hierarchy.assemble();
@@ -373,7 +520,7 @@ pub fn execute() {
     drawing.show("gimp");
 }
 
-fn dialogue() -> usize {
+fn dialogue() -> (usize, bool) {
     let mut buf = String::new();
 
     println!(
@@ -391,5 +538,12 @@ fn dialogue() -> usize {
         count = DEFAULT_ELEMENTS_COUNT;
     }
 
-    count
+    buf.clear();
+    println!("Должна ли иерархия собираться по максимальному (1) или минимальному (0) расстоянию?");
+    stdin()
+        .read_line(&mut buf)
+        .expect("Не удалось прочитать из стандартного ввода.");
+    let reverse = buf.trim().parse::<usize>().unwrap_or(0) == 1;
+
+    (count, reverse)
 }

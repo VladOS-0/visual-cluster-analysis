@@ -2,7 +2,8 @@ use std::{io::stdin, process::exit, time::Instant};
 
 use crate::{
     tasks::{
-        classification, hierarchy_grouping, k_mean, n_classes_functions, two_classes_function,
+        classification, hierarchy_grouping, k_mean, maximin, n_classes_functions,
+        two_classes_function,
     },
     utils::RoundToDecimalPlaces,
 };
@@ -17,7 +18,7 @@ pub mod visual;
 
 pub fn interactive() {
     loop {
-        println!("Какое задание выполнить? (1-5, 0 для выхода)");
+        println!("Какое задание выполнить? (1-6, 0 для выхода)");
         let mut buf = String::new();
         stdin()
             .read_line(&mut buf)
@@ -46,6 +47,9 @@ pub fn interactive() {
                 }
                 5 => {
                     hierarchy_grouping::execute();
+                }
+                6 => {
+                    maximin::execute();
                 }
                 _ => {
                     eprintln!("Указанного задания не существует.");

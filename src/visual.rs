@@ -273,6 +273,55 @@ impl Image {
 
         if is_core {
             self.draw_point_with_color(point, color.0, false, silent);
+            // drawing rectangular around the core
+            self.draw_point_with_color(
+                point.offset(-1.0, -1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(-1.0, 0.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(-1.0, 1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(0.0, 1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(1.0, 1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(1.0, 0.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(1.0, -1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
+            self.draw_point_with_color(
+                point.offset(0.0, -1.0),
+                Color::hex(Color::BLACK, 1.0),
+                false,
+                silent,
+            );
         } else {
             self.draw_point_with_color(point, color.1, true, silent);
         }
@@ -518,6 +567,8 @@ pub struct Color {
 }
 
 impl Color {
+    pub const BLACK: &str = "#000000";
+
     pub fn hex(hex: &str, alpha: f32) -> Self {
         if !hex.starts_with("#") {
             eprintln!("ОШИБКА: Цвет {} не начинается с #!", hex);

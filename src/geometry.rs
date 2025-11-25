@@ -17,7 +17,7 @@ impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
-    pub fn distance_to(self, other: Point) -> f32 {
+    pub fn distance_to(&self, other: &Point) -> f32 {
         f32::sqrt(f32::powi(self.x - other.x, 2) + f32::powi(self.y - other.y, 2))
     }
 

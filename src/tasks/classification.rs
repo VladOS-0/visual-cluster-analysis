@@ -35,7 +35,7 @@ pub fn execute() {
         let mut min_distance = f32::MAX;
         let mut class: Point = Point::new(f32::MAX, f32::MAX);
         for i in &mut classes {
-            let distance = point.distance_to(*i.0);
+            let distance = point.distance_to(i.0);
             if distance < min_distance {
                 class = *i.0;
                 min_distance = distance;
@@ -56,7 +56,7 @@ pub fn execute() {
                 "{}: {} | Расстояние до центра класса: {}",
                 point_num,
                 point,
-                point.distance_to(*class.0).round_to_dp(2)
+                point.distance_to(class.0).round_to_dp(2)
             );
             point_num += 1;
         }
