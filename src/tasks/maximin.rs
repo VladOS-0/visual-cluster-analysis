@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display, io::stdin};
 
+use colored::Colorize;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
@@ -7,7 +8,7 @@ use crate::{
     visual::Image,
 };
 
-const DEFAULT_ELEMENTS_COUNT: usize = 400_000;
+const DEFAULT_ELEMENTS_COUNT: usize = 1_000_000;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Class {
@@ -96,6 +97,7 @@ pub fn execute() {
     println!("Границы: {} \n\n", boundary);
 
     let first_class = Class::with_point(1, 1, boundary.create_rand_point());
+    println!("Создан первый класс в {}", first_class.core.inner);
 
     let mut classes: Vec<Class> = vec![first_class.clone()];
 
@@ -111,28 +113,6 @@ pub fn execute() {
         .collect();
 
     elements.insert(1, first_class.core.clone());
-
-    let mut second_class_core_id = 1;
-    let mut max_distance_from_first_class = 0.0;
-
-    for element in elements.values() {
-        if element.is_core {
-            continue;
-        }
-        let distance_to_core = first_class.core.inner.distance_to(&element.inner);
-        if distance_to_core > max_distance_from_first_class {
-            max_distance_from_first_class = distance_to_core;
-            second_class_core_id = element.id;
-        }
-    }
-
-    if second_class_core_id == 1 {
-        eprintln!("ERROR: Failed to find a core for the 2nd class");
-        return;
-    }
-
-    let second_core = elements.get_mut(&second_class_core_id).unwrap();
-    classes.push(Class::with_classified_point(2, second_core));
 
     loop {
         elements.par_iter_mut().for_each(|(_, element)| {
@@ -166,12 +146,6 @@ pub fn execute() {
             }
         }
 
-        if farthest_farthest_element == 0
-            || elements.get(&farthest_farthest_element).unwrap().is_core
-        {
-            break;
-        }
-
         let mut total_distance = 0.0;
         let mut pair_count = 0;
 
@@ -193,7 +167,7 @@ pub fn execute() {
         if max_max_distance > threshold {
             let new_class_id = classes.len() + 1;
             println!(
-                "Создаем новый класс {} с ядром в точке {}",
+                "Создан класс {} с ядром в точке {}",
                 new_class_id, farthest_farthest_element
             );
             classes.push(Class::with_classified_point(
@@ -221,9 +195,17 @@ pub fn execute() {
 
     println!("\n=== РЕЗУЛЬТАТЫ КЛАССИФИКАЦИИ ===");
     for class in &classes {
+        let class_color = drawing
+            .get_class_color(class.id, false)
+            .map(|our_color| our_color.into())
+            .unwrap_or(colored::Color::White);
+
         println!(
-            "Класс {}: {} элементов, ядро в точке {}",
-            class.id, class.elements_count, class.core.id
+            "[{}] Класс {}: {} элементов, ядро в точке {}",
+            "■■■".color(class_color),
+            class.id,
+            class.elements_count,
+            class.core.id
         );
         println!("  Координаты ядра: {}", class.core.inner);
         drawing.draw_point_with_class(class.core.inner, class.id, true, true);

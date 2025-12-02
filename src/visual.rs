@@ -253,6 +253,12 @@ impl Image {
         class_colors
     }
 
+    pub fn get_class_color(&self, class: usize, core: bool) -> Option<Color> {
+        self.class_colors
+            .get(&class)
+            .map(|pair| if core { pair.0.clone() } else { pair.1.clone() })
+    }
+
     pub fn draw_point_with_class(
         &mut self,
         point: Point,
@@ -626,7 +632,24 @@ impl Color {
         Self::rgba(r, g, b, (POINT_ALPHA * 255.0) as u8)
     }
 
+    #[inline(always)]
     pub fn inner(self) -> Rgba<u8> {
         self.inner
+    }
+
+    pub fn to_rgba_tuple(self) -> (u8, u8, u8, u8) {
+        (
+            self.inner().0[0],
+            self.inner().0[1],
+            self.inner().0[2],
+            self.inner().0[3],
+        )
+    }
+}
+
+impl From<Color> for colored::Color {
+    fn from(value: Color) -> Self {
+        let (r, g, b, _) = value.to_rgba_tuple();
+        Self::TrueColor { r, g, b }
     }
 }

@@ -1,5 +1,7 @@
 use std::io::stdin;
 
+use colored::Colorize;
+
 use crate::{
     geometry::{Axis, Point, Rectangle},
     utils::rand_f32_in_range,
@@ -64,7 +66,16 @@ pub fn execute() {
     }
 
     for (index, (w_0, w_1, w_2, points)) in classes.iter().enumerate() {
-        println!("\nКЛАСС {} -------------------------", index + 1);
+        let class_color = drawing
+            .get_class_color(index, false)
+            .map(|our_color| our_color.into())
+            .unwrap_or(colored::Color::White);
+
+        println!(
+            "\n[{}] Класс {}: -------------------------",
+            "■■■".color(class_color),
+            index + 1
+        );
         println!("f(x, y) = {} + {}x + {}y", w_0, w_1, w_2);
         println!("\nТОЧКИ:");
         for (point_index, point) in points.iter().enumerate() {

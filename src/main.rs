@@ -1,4 +1,4 @@
-use ai_k_mean::interactive;
+use vvcluster::interactive;
 
 pub fn main() {
     interactive()

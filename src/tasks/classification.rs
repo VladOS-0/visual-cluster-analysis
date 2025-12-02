@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, io::stdin};
 
+use colored::Colorize;
+
 use crate::{
     geometry::{Point, Rectangle},
     utils::RoundToDecimalPlaces,
@@ -47,7 +49,17 @@ pub fn execute() {
     let mut class_num: usize = 1;
     for class in &classes {
         println!("---------------------------------------");
-        println!("{} класс: {}", class_num, class.0);
+        let class_color = drawing
+            .get_class_color(class_num, false)
+            .map(|our_color| our_color.into())
+            .unwrap_or(colored::Color::White);
+
+        println!(
+            "[{}] Класс {}: {}",
+            "■■■".color(class_color),
+            class_num,
+            class.0
+        );
         let mut point_num = 1;
         drawing.draw_point_with_class(*class.0, class_num, true, false);
         for point in class.1 {
